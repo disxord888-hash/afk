@@ -460,6 +460,22 @@ document.addEventListener('DOMContentLoaded', () => {
         return map[scale] || '1';
     }
 
+    // 地点情報を簡略化（"東京都新宿区" -> "新宿区"）
+    function simplifyAddress(addr) {
+        if (!addr) return "不明";
+        // 都道府県名を除去
+        const prefs = Object.keys(prefectureCoords);
+        let simplified = addr;
+        for (const pref of prefs) {
+            if (simplified.startsWith(pref)) {
+                simplified = simplified.replace(pref, "");
+                break;
+            }
+        }
+        return simplified || addr;
+    }
+
+
     // 震度(JMA計測震度相当) → 推定PGA(gal)
     function scaleToGal(p2pScale) {
         const scaleToJma = {
@@ -539,7 +555,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const now = new Date();
             kyoshinTime.textContent = now.toTimeString().split(' ')[0];
 
-            if (data.length === 0) return;
+            if (!data || data.length === 0) return;
 
             // 1. 全国最大震度の更新 (最新の地震: data[0])
             const latestEqGlobal = data[0];
@@ -553,7 +569,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 let maxLoc = "不明";
                 if (latestEqGlobal.points && latestEqGlobal.points.length > 0) {
                     const topPoint = latestEqGlobal.points.find(p => p.scale === maxScale) || latestEqGlobal.points[0];
-                    maxLoc = topPoint.addr.replace(topPoint.pref, "") || topPoint.pref;
+                    maxLoc = simplifyAddress(topPoint.addr);
                 } else if (latestEqGlobal.earthquake.hypocenter) {
                     maxLoc = latestEqGlobal.earthquake.hypocenter.name;
                 }
@@ -561,7 +577,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 japanMaxValue.textContent = maxDisplayText;
                 japanMaxLocation.textContent = maxLoc;
                 japanMaxGal.textContent = `${maxGalValue} gal`;
-                japanMaxTime.textContent = (latestEqGlobal.earthquake.time.split(' ')[1] || latestEqGlobal.earthquake.time).substring(0, 5);
+                
+                const rawTime = latestEqGlobal.earthquake.time;
+                japanMaxTime.textContent = (rawTime.includes(' ') ? rawTime.split(' ')[1] : rawTime).substring(0, 5);
                 
                 // 色とアニメーションの適用
                 if (maxScale >= 10) {
@@ -576,64 +594,61 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 // メインジェネレーターの更新 (最新の地震を反映)
-                // ※現在ナビゲーション中でない（最新を表示している）場合のみ自動更新
                 if (currentEqIndex === 0) {
                     applyToGenerator(latestEqGlobal);
                 }
             }
 
             // 2. 選択地点（現在地付近）の震度を探す
-            if (!nearestPref) return;
+            if (nearestPref) {
+                let foundIntensity = null;
+                let foundTime = null;
 
-            let foundIntensity = null;
-            let foundTime = null;
-            let foundEqItemLocal = null;
+                for (const item of data) {
+                    if (!item.earthquake || !item.points) continue;
 
-            for (const item of data) {
-                if (!item.earthquake || !item.points) continue;
-
-                // 選択した都道府県で観測された震度を検索
-                for (const point of item.points) {
-                    if (point.pref === nearestPref || point.addr.startsWith(nearestPref)) {
-                        if (foundIntensity === null || point.scale > foundIntensity) {
-                            foundIntensity = point.scale;
-                            foundTime = item.earthquake.time;
-                            foundEqItemLocal = item;
+                    for (const point of item.points) {
+                        if (point.pref === nearestPref || point.addr.startsWith(nearestPref)) {
+                            if (foundIntensity === null || point.scale > foundIntensity) {
+                                foundIntensity = point.scale;
+                                foundTime = item.earthquake.time;
+                            }
                         }
                     }
+                    if (foundIntensity !== null) break;
                 }
-                // 最新の地震で見つかったらそこで止める（過去分は追わない）
-                if (foundIntensity !== null) break;
-            }
 
-            if (foundIntensity !== null) {
-                const displayText = p2pScaleToDisplay(foundIntensity);
-                const internalVal = p2pScaleToInternal(foundIntensity);
-                const galValue = scaleToGal(foundIntensity);
+                if (foundIntensity !== null) {
+                    const displayText = p2pScaleToDisplay(foundIntensity);
+                    const internalVal = p2pScaleToInternal(foundIntensity);
+                    const galValue = scaleToGal(foundIntensity);
 
-                kyoshinIntensityValue.textContent = displayText;
-                applyKyoshinColor(internalVal);
-                kyoshinGal.textContent = `≈ ${galValue} gal`;
-                kyoshinGal.style.color = 'rgba(100, 220, 180, 0.9)';
-                kyoshinStatus.textContent = `最新: ${foundTime.split(' ')[1]}`;
-                kyoshinStatus.style.color = 'rgba(239, 68, 68, 0.9)';
-            } else {
-                kyoshinIntensityValue.textContent = '-';
-                resetKyoshinColor();
-                kyoshinGal.textContent = '0 gal';
-                kyoshinGal.style.color = 'rgba(148, 163, 184, 0.6)';
-                kyoshinStatus.textContent = `${nearestPref}: 観測なし`;
-                kyoshinStatus.style.color = 'rgba(148, 163, 184, 0.7)';
+                    kyoshinIntensityValue.textContent = displayText;
+                    applyKyoshinColor(internalVal);
+                    kyoshinGal.textContent = `≈ ${galValue} gal`;
+                    kyoshinGal.style.color = 'rgba(100, 220, 180, 0.9)';
+                    const timePart = foundTime.includes(' ') ? foundTime.split(' ')[1] : foundTime;
+                    kyoshinStatus.textContent = `最新: ${timePart.substring(0, 5)}`;
+                    kyoshinStatus.style.color = 'rgba(239, 68, 68, 0.9)';
+                } else {
+                    kyoshinIntensityValue.textContent = '-';
+                    resetKyoshinColor();
+                    kyoshinGal.textContent = '0 gal';
+                    kyoshinGal.style.color = 'rgba(148, 163, 184, 0.6)';
+                    kyoshinStatus.textContent = `${nearestPref}: 観測なし`;
+                    kyoshinStatus.style.color = 'rgba(148, 163, 184, 0.7)';
+                }
             }
 
             kyoshinLiveDot.className = 'kyoshin-live-dot';
 
         } catch (err) {
-            console.error('地震データ取得エラー:', err);
-            kyoshinStatus.textContent = '取得エラー';
+            console.error('地震データ更新エラー:', err);
+            kyoshinStatus.textContent = 'データ更新エラー';
             kyoshinLiveDot.className = 'kyoshin-live-dot error';
         }
     }
+
 
 
     // 都道府県セレクト変更時
@@ -649,43 +664,36 @@ document.addEventListener('DOMContentLoaded', () => {
     function initKyoshinMonitor() {
         kyoshinLiveDot.className = 'kyoshin-live-dot searching';
 
-        // まずGeolocationで自動検出を試みる
+        // 即時実行のためのデフォルト設定
+        nearestPref = '東京都';
+        kyoshinPrefSelect.value = '東京都';
+        fetchKyoshinData();
+
+        // Geolocationで自動検出を試みる
         if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(
                 (pos) => {
                     const detected = findNearestPrefecture(pos.coords.latitude, pos.coords.longitude);
-                    // セレクトに値がまだ未選択（自動検出中）の場合のみ設定
-                    if (!kyoshinPrefSelect.value) {
+                    // まだユーザーが手動で変えていない場合、自動検出した場所に切り替え
+                    if (kyoshinPrefSelect.value === '東京都' || !kyoshinPrefSelect.value) {
                         nearestPref = detected;
                         kyoshinPrefSelect.value = detected;
-                        kyoshinLiveDot.className = 'kyoshin-live-dot';
                         fetchKyoshinData();
                     }
+                    kyoshinLiveDot.className = 'kyoshin-live-dot';
                 },
                 () => {
-                    // 位置情報取得失敗：東京をデフォルトに
-                    if (!kyoshinPrefSelect.value) {
-                        nearestPref = '東京都';
-                        kyoshinPrefSelect.value = '東京都';
-                        kyoshinLiveDot.className = 'kyoshin-live-dot';
-                        fetchKyoshinData();
-                    }
+                    // 失敗時はデフォルト維持
+                    kyoshinLiveDot.className = 'kyoshin-live-dot';
                 },
                 { timeout: 10000, maximumAge: 300000 }
             );
-        } else {
-            // Geolocation非対応：東京をデフォルトに
-            nearestPref = '東京都';
-            kyoshinPrefSelect.value = '東京都';
-            kyoshinLiveDot.className = 'kyoshin-live-dot';
-            fetchKyoshinData();
         }
 
-        // 15秒ごとにポーリング
-        kyoshinInterval = setInterval(() => {
-            if (nearestPref) fetchKyoshinData();
-        }, 15000);
+        // 15秒ごとにポーリング (nearestPrefの有無によらず実行)
+        kyoshinInterval = setInterval(fetchKyoshinData, 15000);
     }
+
 
     // 強震モニタ初期化
     initKyoshinMonitor();
