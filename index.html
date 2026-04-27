@@ -10,134 +10,36 @@
 </head>
 
 <body>
-    <div class="app-container">
-        <!-- サイドバー: コントロールパネルと凡例 -->
-        <aside class="sidebar">
-            <h1 class="app-title">地震情報<br>ジェネレーター</h1>
+    <!-- 非表示の内部状態管理用 -->
+    <input type="hidden" id="input-intensity" value="1">
+    <input type="hidden" id="input-magnitude" value="1.0">
+    <input type="hidden" id="input-epicenter" value="">
+    <input type="hidden" id="input-depth" value="0">
+    <input type="hidden" id="input-time" value="">
+    <select id="history-select" style="display:none"><option value=""></option></select>
+    <textarea id="play-script" style="display:none"></textarea>
+    <button id="btn-custom-play" style="display:none"></button>
+    <button id="btn-json-export" style="display:none"></button>
 
-            <div class="control-panel">
-                <div class="form-group">
-                    <label for="input-intensity">震度パラメータ</label>
-                    <div class="custom-select">
-                        <select id="input-intensity">
-                            <option value="1">震度 1</option>
-                            <option value="2">震度 2</option>
-                            <option value="3">震度 3</option>
-                            <option value="4">震度 4</option>
-                            <option value="5-">震度 5弱</option>
-                            <option value="5+">震度 5強</option>
-                            <option value="5">震度 5 (旧)</option>
-                            <option value="6-">震度 6弱</option>
-                            <option value="6+" selected>震度 6強</option>
-                            <option value="6">震度 6 (旧)</option>
-                            <option value="7">震度 7</option>
-                        </select>
-                    </div>
-                </div>
-
-                <div class="form-group">
-                    <label for="input-magnitude">マグニチュード (M)</label>
-                    <input type="number" id="input-magnitude" step="0.1" min="1.0" value="6.5">
-                </div>
-
-                <div class="form-group">
-                    <label for="input-epicenter">震源地</label>
-                    <input type="text" id="input-epicenter" value="千葉県北西部">
-                </div>
-
-                <div class="form-group">
-                    <label for="input-depth">深さ (km)</label>
-                    <input type="number" id="input-depth" min="0" value="50">
-                </div>
-
-                <div class="form-group">
-                    <label for="input-time">発生時刻</label>
-                    <input type="text" id="input-time" value="2026/04/27 13:00:00" placeholder="YYYY/MM/DD HH:MM:SS">
-                </div>
-
-                <div class="form-group"
-                    style="margin-top: 1rem; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 1.5rem;">
-                    <label for="history-select">📜 過去の地震履歴から適用 (P2PQuake)</label>
-                    <div class="custom-select">
-                        <select id="history-select">
-                            <option value="">履歴データをロード中...</option>
-                        </select>
-                    </div>
-                </div>
-            </div>
-
-            <!-- カスタムプレイ機能 -->
-            <div class="control-panel">
-                <div class="form-group">
-                    <label>🎬 カスタムプレイ機能</label>
-                    <div style="font-size:0.8rem; color: var(--text-secondary); margin-bottom: 0.4rem;">「秒: 震度, M, 深さ, 時刻, 地点」を指定 (省略可)</div>
-                    <textarea id="play-script" rows="6" style="width:100%; background:rgba(15,23,42,0.8); color:#f8fafc; padding:0.8rem; border-radius:8px; border:1px solid rgba(255,255,255,0.2); font-family:monospace; resize:vertical; font-size:0.95rem; line-height:1.4;">0: 1, 4.5, 30, 13:00:00, 千葉県北西部
-3: 3, 5.0, , 13:01:20
-5: 5-, 6.2, 20, , 東京湾
-8: 6+, 6.8
-12: 7, 7.6, 10, 13:05:00, 相模湾</textarea>
-                    <div style="display:flex; gap:0.4rem; margin-top:0.5rem;">
-                        <button id="btn-custom-play" type="button" class="btn-api" style="flex:1; background: linear-gradient(135deg, #10b981, #047857);">▶️ 再生</button>
-                        <button id="btn-json-export" type="button" class="btn-api" style="flex:1; background: linear-gradient(135deg, #f59e0b, #d97706);">📄 JSON出力</button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- 凡例(Legends) -->
-            <div class="legend-panel">
-                <h2>カラーテーブルと絵文字対応表</h2>
-                <div class="legend-tables">
-                    <!-- 震度凡例 -->
-                    <div class="legend-section">
-                        <h3>震度</h3>
-                        <div class="legend-grid grid-1">
-                            <div class="legend-item"><span class="emoji">⬛️</span> 1</div>
-                            <div class="legend-item"><span class="emoji">🟦</span> 2</div>
-                            <div class="legend-item"><span class="emoji">🟩</span> 3</div>
-                            <div class="legend-item"><span class="emoji">🟨</span> 4</div>
-                            <div class="legend-item wide"><span class="emoji">🟧</span> 5- & 5+ & 旧5</div>
-                            <div class="legend-item wide"><span class="emoji">🟥</span> 6- & 6+ & 旧6</div>
-                            <div class="legend-item wide"><span class="emoji">🟪</span> 7</div>
-                        </div>
-                    </div>
-
-                    <!-- M凡例 -->
-                    <div class="legend-section">
-                        <h3>マグニチュード</h3>
-                        <div class="legend-grid grid-2">
-                            <div class="legend-item"><span class="emoji">⬜</span> 1.0~2.4</div>
-                            <div class="legend-item"><span class="emoji">⬛</span> 2.5~3.5</div>
-                            <div class="legend-item"><span class="emoji">🟦</span> 3.6~4.5</div>
-                            <div class="legend-item"><span class="emoji">🟩</span> 4.6~5.5</div>
-                            <div class="legend-item"><span class="emoji">🟨</span> 5.6~6.0</div>
-                            <div class="legend-item"><span class="emoji">🟧</span> 6.1~6.5</div>
-                            <div class="legend-item"><span class="emoji">🟥</span> 6.6~7.0</div>
-                            <div class="legend-item"><span class="emoji">🟪</span> 7.1~7.5</div>
-                            <div class="legend-item"><span class="emoji">⚠</span> 7.6~8.0</div>
-                            <div class="legend-item"><span class="emoji">🗾</span> 8.1~</div>
-                        </div>
-                    </div>
-
-                    <!-- 深さ凡例 -->
-                    <div class="legend-section">
-                        <h3>深さ (km)</h3>
-                        <div class="legend-grid grid-2">
-                            <div class="legend-item"><span class="emoji">⬜</span> ~10</div>
-                            <div class="legend-item"><span class="emoji">⬛</span> 11~20</div>
-                            <div class="legend-item"><span class="emoji">🟦</span> 21~30</div>
-                            <div class="legend-item"><span class="emoji">🟩</span> 31~50</div>
-                            <div class="legend-item"><span class="emoji">🟨</span> 51~100</div>
-                            <div class="legend-item"><span class="emoji">🟧</span> 101~200</div>
-                            <div class="legend-item"><span class="emoji">🟥</span> 201~400</div>
-                            <div class="legend-item"><span class="emoji">🟪</span> 401~</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </aside>
-
-        <!-- メイン画面: モニター -->
+    <div class="app-container">        <!-- メイン画面: モニター -->
         <main class="main-display">
+            <!-- 全国最大震度 左上 -->
+            <div class="japan-max-card" id="japan-max-card">
+                <div class="japan-max-header">
+                    <span class="japan-max-icon">🗾</span>
+                    <span class="japan-max-title">全国最大震度</span>
+                </div>
+                <div class="japan-max-body">
+                    <div class="japan-max-circle" id="japan-max-circle">
+                        <span class="japan-max-value" id="japan-max-value">-</span>
+                    </div>
+                    <div class="japan-max-info">
+                        <div class="japan-max-location" id="japan-max-location">--</div>
+                        <div class="japan-max-gal" id="japan-max-gal">-- gal</div>
+                        <div class="japan-max-time" id="japan-max-time">--</div>
+                    </div>
+                </div>
+            </div>
             <!-- 強震モニタ風 現在地震度カード 右上（モニター外） -->
             <div class="kyoshin-card" id="kyoshin-card">
                 <div class="kyoshin-header">
@@ -207,20 +109,25 @@
                 <div class="kyoshin-time" id="kyoshin-time">--:--:--</div>
             </div>
             <div class="monitor-wrapper" id="monitor-wrapper">
+                <!-- ナビゲーションボタン -->
+                <button class="eq-nav-btn eq-nav-prev" id="eq-nav-prev" title="前の地震">＜</button>
+                <button class="eq-nav-btn eq-nav-next" id="eq-nav-next" title="次の地震">＞</button>
+                <div class="eq-nav-index" id="eq-nav-index"></div>
+
                 <!-- 震源地 上部 -->
                 <div class="status-card epicenter-top" id="display-epicenter-card">
                     <div class="monitor-label">震央地名 <span class="title-emoji" id="title-emoji-epi">❌</span></div>
                     <div class="status-value">
-                        <span class="value" id="disp-val-epi">千葉県北西部</span>
+                        <span class="value" id="disp-val-epi">--</span>
                     </div>
-                    <div class="time-stamp" id="disp-val-time">2026/04/27 13:00:00</div>
+                    <div class="time-stamp" id="disp-val-time">--</div>
                 </div>
 
                 <!-- 震度 中央 -->
                 <div class="intensity-center" id="display-intensity-card">
                     <div class="monitor-label">最大震度 <span class="title-emoji" id="title-emoji-int"></span></div>
                     <div class="intensity-value-wrap">
-                        <span class="value" id="disp-val-int">6強</span>
+                        <span class="value" id="disp-val-int">-</span>
                     </div>
                 </div>
 
@@ -229,7 +136,7 @@
                     <div class="monitor-label">マグニチュード <span class="title-emoji" id="title-emoji-mag"></span></div>
                     <div class="status-value">
                         <span class="prefix">M</span>
-                        <span class="value" id="disp-val-mag">6.5</span>
+                        <span class="value" id="disp-val-mag">--</span>
                     </div>
                 </div>
 
@@ -237,7 +144,7 @@
                 <div class="status-card depth-right" id="display-depth-card">
                     <div class="monitor-label">震源の深さ <span class="title-emoji" id="title-emoji-dep"></span></div>
                     <div class="status-value">
-                        <span class="value" id="disp-val-dep">50</span>
+                        <span class="value" id="disp-val-dep">--</span>
                         <span class="unit">km</span>
                     </div>
                 </div>

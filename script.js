@@ -132,75 +132,32 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // P2PQuake API から履歴一覧を取得
-    async function fetchEarthquakeHistory() {
-        try {
-            const res = await fetch('https://api.p2pquake.net/v2/history?codes=551&limit=100');
-            const data = await res.json();
-            
-            const oneYearAgo = new Date();
-            oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+    // P2PQuake API から履歴一覧を取得（ナビゲーション用）
+    let currentEqIndex = 0;
+    const eqNavPrev = document.getElementById('eq-nav-prev');
+    const eqNavNext = document.getElementById('eq-nav-next');
+    const eqNavIndex = document.getElementById('eq-nav-index');
 
-            historyData = data.filter(d => {
-                if (!d.earthquake || !d.earthquake.hypocenter) return false;
-                const eq = d.earthquake;
-                
-                const name = eq.hypocenter.name;
-                if (!name || name === '' || name === '不明') return false;
-                if (eq.maxScale === undefined || eq.maxScale === null || eq.maxScale === -1) return false;
-                if (eq.maxScale < 30) return false;
-                
-                const eqDate = new Date(eq.time);
-                if (eqDate < oneYearAgo) return false;
-                
-                return true;
-            });
-            
-            if (historyData.length === 0) {
-                historySelect.innerHTML = '<option value="">条件に合うデータがありません</option>';
-                return;
-            }
-
-            historySelect.innerHTML = `<option value="">▼ 過去の地震から選択（震度3以上: ${historyData.length}件）</option>`;
-            
-            historyData.forEach((d, index) => {
-                const eq = d.earthquake;
-                const hypo = eq.hypocenter;
-                const timeStr = eq.time; 
-                const name = hypo.name || '不明';
-                const mag = hypo.magnitude === -1 ? '不明' : hypo.magnitude;
-                
-                let scaleStr = "?";
-                const sm = { 10:'1', 20:'2', 30:'3', 40:'4', 45:'5-', 50:'5+', 55:'6-', 60:'6+', 70:'7'};
-                if (sm[eq.maxScale]) scaleStr = sm[eq.maxScale];
-                
-                const option = document.createElement('option');
-                option.value = index;
-                let shortTime = timeStr;
-                const match = timeStr.match(/^\d{4}\/((\d{2}\/\d{2} \d{2}:\d{2}))/);
-                if(match) shortTime = match[1];
-
-                option.textContent = `[${shortTime}] 震源: ${name.substring(0, 8)} (震度${scaleStr}/M${mag})`;
-                historySelect.appendChild(option);
-            });
-        } catch(error) {
-            console.error(error);
-            historySelect.innerHTML = '<option value="">❌ 履歴データの取得エラー</option>';
+    function updateNavButtons() {
+        eqNavPrev.disabled = (currentEqIndex >= historyData.length - 1);
+        eqNavNext.disabled = (currentEqIndex <= 0);
+        if (historyData.length > 0) {
+            eqNavIndex.textContent = `${currentEqIndex + 1} / ${historyData.length}`;
+        } else {
+            eqNavIndex.textContent = 'データなし';
         }
     }
 
-    // 履歴セレクト変更時のイベント
-    historySelect.addEventListener('change', (e) => {
-        const index = e.target.value;
-        if (index === "") return;
-        
+    function showEarthquakeAt(index) {
+        if (index < 0 || index >= historyData.length) return;
+        currentEqIndex = index;
         const d = historyData[index];
         const eq = d.earthquake;
         const hypo = eq.hypocenter;
 
-        inputEpicenter.value = hypo.name || '不明';
-        inputDepth.value = (hypo.depth === -1) ? 0 : hypo.depth;
-        inputMagnitude.value = (hypo.magnitude === -1) ? 1.0 : hypo.magnitude;
+        inputEpicenter.value = (hypo && hypo.name) ? hypo.name : '不明';
+        inputDepth.value = (hypo && hypo.depth !== -1) ? hypo.depth : 0;
+        inputMagnitude.value = (hypo && hypo.magnitude !== -1) ? hypo.magnitude : 1.0;
         inputTime.value = eq.time || '';
 
         const scaleMap = {
@@ -210,11 +167,51 @@ document.addEventListener('DOMContentLoaded', () => {
         if (scaleMap[eq.maxScale]) {
             inputIntensity.value = scaleMap[eq.maxScale];
         }
-        
+
         updateDisplay();
+        updateNavButtons();
+    }
+
+    async function fetchEarthquakeHistory() {
+        try {
+            const res = await fetch('https://api.p2pquake.net/v2/history?codes=551&limit=100');
+            const data = await res.json();
+
+            historyData = data.filter(d => {
+                if (!d.earthquake || !d.earthquake.hypocenter) return false;
+                const eq = d.earthquake;
+                const name = eq.hypocenter.name;
+                if (!name || name === '' || name === '不明') return false;
+                if (eq.maxScale === undefined || eq.maxScale === null || eq.maxScale === -1) return false;
+                return true;
+            });
+
+            if (historyData.length > 0) {
+                currentEqIndex = 0;
+                showEarthquakeAt(0);
+            }
+            updateNavButtons();
+        } catch(error) {
+            console.error(error);
+            eqNavIndex.textContent = '取得エラー';
+        }
+    }
+
+    // ＜ボタン（前＝古い地震へ）
+    eqNavPrev.addEventListener('click', () => {
+        if (currentEqIndex < historyData.length - 1) {
+            showEarthquakeAt(currentEqIndex + 1);
+        }
     });
 
-    // イベントリスナー登録
+    // ＞ボタン（次＝新しい地震へ）
+    eqNavNext.addEventListener('click', () => {
+        if (currentEqIndex > 0) {
+            showEarthquakeAt(currentEqIndex - 1);
+        }
+    });
+
+    // イベントリスナー登録（hiddenからの手動変更用に残す）
     inputEpicenter.addEventListener('input', updateDisplay);
     inputIntensity.addEventListener('change', updateDisplay);
     inputMagnitude.addEventListener('input', updateDisplay);
@@ -349,13 +346,22 @@ document.addEventListener('DOMContentLoaded', () => {
     // 強震モニタ風：現在地付近の震度表示
     // ========================================
     const kyoshinCard = document.getElementById('kyoshin-card');
-    const kyoshinLocation = document.getElementById('kyoshin-location');
+    const kyoshinPrefSelect = document.getElementById('kyoshin-pref-select');
     const kyoshinIntensityValue = document.getElementById('kyoshin-intensity-value');
     const kyoshinIntensityCircle = document.getElementById('kyoshin-intensity-circle');
     const kyoshinStatus = document.getElementById('kyoshin-status');
     const kyoshinTime = document.getElementById('kyoshin-time');
     const kyoshinLiveDot = document.getElementById('kyoshin-live-dot');
     const kyoshinGal = document.getElementById('kyoshin-gal');
+
+    // 全国最大震度用要素
+    const japanMaxCard = document.getElementById('japan-max-card');
+    const japanMaxCircle = document.getElementById('japan-max-circle');
+    const japanMaxValue = document.getElementById('japan-max-value');
+    const japanMaxLocation = document.getElementById('japan-max-location');
+    const japanMaxGal = document.getElementById('japan-max-gal');
+    const japanMaxTime = document.getElementById('japan-max-time');
+
 
     // 都道府県の代表的な緯度経度
     const prefectureCoords = {
@@ -408,8 +414,6 @@ document.addEventListener('DOMContentLoaded', () => {
         '沖縄県': { lat: 26.34, lng: 127.80 }
     };
 
-    let userLat = null;
-    let userLng = null;
     let nearestPref = null;
     let kyoshinInterval = null;
 
@@ -457,10 +461,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // 震度(JMA計測震度相当) → 推定PGA(gal)
-    // JMA式: I = 2 * log10(PGA) + 0.94
-    // → PGA = 10^((I - 0.94) / 2)
     function scaleToGal(p2pScale) {
-        // P2PQuakeスケール値 → JMA計測震度の近似値
         const scaleToJma = {
             10: 0.5, 20: 1.5, 30: 2.5, 40: 3.5,
             45: 4.5, 46: 4.5, 50: 5.0, 55: 5.5, 60: 6.0, 70: 6.5
@@ -488,6 +489,16 @@ document.addEventListener('DOMContentLoaded', () => {
         kyoshinIntensityValue.style.color = 'rgba(200, 220, 255, 0.8)';
         kyoshinCard.classList.remove('intensity-active');
     }
+
+    // 全国最大震度のリセット
+    function resetJapanMaxColor() {
+        japanMaxCircle.style.background = 'rgba(30, 41, 59, 0.9)';
+        japanMaxCircle.style.borderColor = 'rgba(168, 85, 247, 0.3)';
+        japanMaxCircle.style.boxShadow = '0 0 16px rgba(168, 85, 247, 0.15), inset 0 0 10px rgba(0, 0, 0, 0.4)';
+        japanMaxValue.style.color = 'rgba(200, 220, 255, 0.8)';
+        japanMaxCard.classList.remove('intensity-active');
+    }
+
 
     // 地震検知時にメインジェネレーターへ反映
     function applyToGenerator(eqItem) {
@@ -521,39 +532,78 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // P2PQuake APIから最新の地震情報を取得して表示
     async function fetchKyoshinData() {
-        if (!nearestPref) return;
-
         try {
-            const res = await fetch('https://api.p2pquake.net/v2/history?codes=551&limit=5');
+            const res = await fetch('https://api.p2pquake.net/v2/history?codes=551&limit=10');
             const data = await res.json();
 
             const now = new Date();
             kyoshinTime.textContent = now.toTimeString().split(' ')[0];
 
-            // 直近30分以内の地震で、最寄りの都道府県の震度を探す
+            if (data.length === 0) return;
+
+            // 1. 全国最大震度の更新 (最新の地震: data[0])
+            const latestEqGlobal = data[0];
+            if (latestEqGlobal.earthquake && latestEqGlobal.earthquake.maxScale !== undefined) {
+                const maxScale = latestEqGlobal.earthquake.maxScale;
+                const maxDisplayText = p2pScaleToDisplay(maxScale);
+                const maxInternalVal = p2pScaleToInternal(maxScale);
+                const maxGalValue = scaleToGal(maxScale);
+                
+                // 代表地点の取得
+                let maxLoc = "不明";
+                if (latestEqGlobal.points && latestEqGlobal.points.length > 0) {
+                    const topPoint = latestEqGlobal.points.find(p => p.scale === maxScale) || latestEqGlobal.points[0];
+                    maxLoc = topPoint.addr.replace(topPoint.pref, "") || topPoint.pref;
+                } else if (latestEqGlobal.earthquake.hypocenter) {
+                    maxLoc = latestEqGlobal.earthquake.hypocenter.name;
+                }
+
+                japanMaxValue.textContent = maxDisplayText;
+                japanMaxLocation.textContent = maxLoc;
+                japanMaxGal.textContent = `${maxGalValue} gal`;
+                japanMaxTime.textContent = (latestEqGlobal.earthquake.time.split(' ')[1] || latestEqGlobal.earthquake.time).substring(0, 5);
+                
+                // 色とアニメーションの適用
+                if (maxScale >= 10) {
+                    const colorInfo = getIntensityColor(maxInternalVal);
+                    japanMaxCircle.style.background = colorInfo.bg;
+                    japanMaxCircle.style.borderColor = colorInfo.glow;
+                    japanMaxCircle.style.boxShadow = `0 0 20px ${colorInfo.glow}, inset 0 0 10px rgba(255,255,255,0.3)`;
+                    japanMaxValue.style.color = colorInfo.textDark ? '#111827' : '#ffffff';
+                    japanMaxCard.classList.add('intensity-active');
+                } else {
+                    resetJapanMaxColor();
+                }
+
+                // メインジェネレーターの更新 (最新の地震を反映)
+                // ※現在ナビゲーション中でない（最新を表示している）場合のみ自動更新
+                if (currentEqIndex === 0) {
+                    applyToGenerator(latestEqGlobal);
+                }
+            }
+
+            // 2. 選択地点（現在地付近）の震度を探す
+            if (!nearestPref) return;
+
             let foundIntensity = null;
             let foundTime = null;
-            let foundEqItem = null;
+            let foundEqItemLocal = null;
 
             for (const item of data) {
                 if (!item.earthquake || !item.points) continue;
 
-                const eqTime = new Date(item.earthquake.time.replace(/\//g, '-'));
-                const diffMin = (now - eqTime) / 60000;
-
-                // 30分以内の地震のみ
-                if (diffMin > 30) continue;
-
-                // 現在地の都道府県で観測された震度を検索
+                // 選択した都道府県で観測された震度を検索
                 for (const point of item.points) {
                     if (point.pref === nearestPref || point.addr.startsWith(nearestPref)) {
                         if (foundIntensity === null || point.scale > foundIntensity) {
                             foundIntensity = point.scale;
                             foundTime = item.earthquake.time;
-                            foundEqItem = item;
+                            foundEqItemLocal = item;
                         }
                     }
                 }
+                // 最新の地震で見つかったらそこで止める（過去分は追わない）
+                if (foundIntensity !== null) break;
             }
 
             if (foundIntensity !== null) {
@@ -565,71 +615,76 @@ document.addEventListener('DOMContentLoaded', () => {
                 applyKyoshinColor(internalVal);
                 kyoshinGal.textContent = `≈ ${galValue} gal`;
                 kyoshinGal.style.color = 'rgba(100, 220, 180, 0.9)';
-                kyoshinStatus.textContent = `検知: ${foundTime}`;
+                kyoshinStatus.textContent = `最新: ${foundTime.split(' ')[1]}`;
                 kyoshinStatus.style.color = 'rgba(239, 68, 68, 0.9)';
-
-                // メインジェネレーターにも反映
-                applyToGenerator(foundEqItem);
             } else {
-                kyoshinIntensityValue.textContent = '0';
+                kyoshinIntensityValue.textContent = '-';
                 resetKyoshinColor();
                 kyoshinGal.textContent = '0 gal';
                 kyoshinGal.style.color = 'rgba(148, 163, 184, 0.6)';
-                kyoshinStatus.textContent = '観測なし（直近30分）';
+                kyoshinStatus.textContent = `${nearestPref}: 観測なし`;
                 kyoshinStatus.style.color = 'rgba(148, 163, 184, 0.7)';
             }
 
             kyoshinLiveDot.className = 'kyoshin-live-dot';
 
         } catch (err) {
-            console.error('強震モニタデータ取得エラー:', err);
+            console.error('地震データ取得エラー:', err);
             kyoshinStatus.textContent = '取得エラー';
             kyoshinLiveDot.className = 'kyoshin-live-dot error';
         }
     }
 
+
+    // 都道府県セレクト変更時
+    kyoshinPrefSelect.addEventListener('change', () => {
+        const val = kyoshinPrefSelect.value;
+        if (val) {
+            nearestPref = val;
+            fetchKyoshinData();
+        }
+    });
+
     // 位置情報の取得とモニタリング開始
     function initKyoshinMonitor() {
-        if (!navigator.geolocation) {
-            kyoshinLocation.textContent = '位置情報非対応';
-            kyoshinStatus.textContent = 'Geolocation非対応';
-            kyoshinLiveDot.className = 'kyoshin-live-dot error';
-            return;
-        }
-
         kyoshinLiveDot.className = 'kyoshin-live-dot searching';
 
-        navigator.geolocation.getCurrentPosition(
-            (pos) => {
-                userLat = pos.coords.latitude;
-                userLng = pos.coords.longitude;
-                nearestPref = findNearestPrefecture(userLat, userLng);
+        // まずGeolocationで自動検出を試みる
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                    const detected = findNearestPrefecture(pos.coords.latitude, pos.coords.longitude);
+                    // セレクトに値がまだ未選択（自動検出中）の場合のみ設定
+                    if (!kyoshinPrefSelect.value) {
+                        nearestPref = detected;
+                        kyoshinPrefSelect.value = detected;
+                        kyoshinLiveDot.className = 'kyoshin-live-dot';
+                        fetchKyoshinData();
+                    }
+                },
+                () => {
+                    // 位置情報取得失敗：東京をデフォルトに
+                    if (!kyoshinPrefSelect.value) {
+                        nearestPref = '東京都';
+                        kyoshinPrefSelect.value = '東京都';
+                        kyoshinLiveDot.className = 'kyoshin-live-dot';
+                        fetchKyoshinData();
+                    }
+                },
+                { timeout: 10000, maximumAge: 300000 }
+            );
+        } else {
+            // Geolocation非対応：東京をデフォルトに
+            nearestPref = '東京都';
+            kyoshinPrefSelect.value = '東京都';
+            kyoshinLiveDot.className = 'kyoshin-live-dot';
+            fetchKyoshinData();
+        }
 
-                kyoshinLocation.textContent = `📍 ${nearestPref}付近`;
-                kyoshinLiveDot.className = 'kyoshin-live-dot';
-
-                // 初回取得
-                fetchKyoshinData();
-
-                // 15秒ごとにポーリング
-                kyoshinInterval = setInterval(fetchKyoshinData, 15000);
-            },
-            (err) => {
-                console.warn('位置情報取得エラー:', err);
-                // フォールバック: 東京をデフォルトにする
-                userLat = 35.68;
-                userLng = 139.69;
-                nearestPref = '東京都';
-
-                kyoshinLocation.textContent = `📍 ${nearestPref}付近（既定）`;
-                kyoshinLiveDot.className = 'kyoshin-live-dot';
-                kyoshinStatus.textContent = '位置情報: 既定値使用';
-
-                fetchKyoshinData();
-                kyoshinInterval = setInterval(fetchKyoshinData, 15000);
-            },
-            { timeout: 10000, maximumAge: 300000 }
-        );
+        // 15秒ごとにポーリング
+        kyoshinInterval = setInterval(() => {
+            if (nearestPref) fetchKyoshinData();
+        }, 15000);
     }
 
     // 強震モニタ初期化

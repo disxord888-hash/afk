@@ -41,6 +41,8 @@ body {
     display: flex;
     width: 100vw;
     height: 100vh;
+    align-items: center;
+    justify-content: center;
 }
 
 /* Sidebar */
@@ -199,6 +201,72 @@ body {
     background-size: 50px 50px;
     pointer-events: none;
     z-index: 0;
+}
+
+/* ナビゲーションボタン */
+.eq-nav-btn {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 10;
+    width: 40px;
+    height: 80px;
+    background: rgba(15, 23, 42, 0.7);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 1.2rem;
+    font-weight: 900;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+}
+
+.eq-nav-prev {
+    left: 0;
+    border-radius: 0 12px 12px 0;
+    border-left: none;
+}
+
+.eq-nav-next {
+    right: 0;
+    border-radius: 12px 0 0 12px;
+    border-right: none;
+}
+
+.eq-nav-btn:hover {
+    background: rgba(59, 130, 246, 0.4);
+    color: #fff;
+    border-color: rgba(59, 130, 246, 0.6);
+}
+
+.eq-nav-btn:active {
+    transform: translateY(-50%) scale(0.95);
+}
+
+.eq-nav-btn:disabled {
+    opacity: 0.25;
+    cursor: default;
+    pointer-events: none;
+}
+
+.eq-nav-index {
+    position: absolute;
+    bottom: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10;
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: rgba(148, 163, 184, 0.7);
+    background: rgba(0, 0, 0, 0.5);
+    padding: 3px 12px;
+    border-radius: 10px;
+    font-family: monospace;
+    letter-spacing: 0.05em;
 }
 
 /* 震度 中央 */
@@ -562,4 +630,118 @@ body {
 @keyframes kyoshin-pulse {
     0%, 100% { transform: scale(1); }
     50% { transform: scale(1.06); }
+}
+
+/* ========================================
+   全国最大震度カード（左上）
+   ======================================== */
+.japan-max-card {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    z-index: 20;
+    background: rgba(10, 15, 30, 0.88);
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(168, 85, 247, 0.25);
+    border-radius: 14px;
+    padding: 10px 14px;
+    min-width: 200px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    box-shadow: 
+        0 8px 32px rgba(0, 0, 0, 0.5),
+        0 0 20px rgba(168, 85, 247, 0.1),
+        inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    transition: all 0.5s ease;
+}
+
+.japan-max-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    padding-bottom: 4px;
+}
+
+.japan-max-icon {
+    font-size: 1rem;
+}
+
+.japan-max-title {
+    font-size: 0.75rem;
+    font-weight: 900;
+    color: rgba(232, 240, 255, 0.95);
+    letter-spacing: 0.05em;
+}
+
+.japan-max-body {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.japan-max-circle {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(30, 41, 59, 0.9);
+    border: 3px solid rgba(168, 85, 247, 0.3);
+    box-shadow: 
+        0 0 16px rgba(168, 85, 247, 0.15),
+        inset 0 0 10px rgba(0, 0, 0, 0.4);
+    transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.japan-max-value {
+    font-size: 1.85rem;
+    font-weight: 900;
+    color: rgba(200, 220, 255, 0.8);
+    line-height: 1;
+    transition: color 0.5s ease;
+}
+
+.japan-max-info {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    flex: 1;
+}
+
+.japan-max-location {
+    font-size: 0.88rem;
+    font-weight: 900;
+    color: #f8fafc;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 110px;
+}
+
+.japan-max-gal {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: rgba(100, 220, 180, 0.9);
+    font-family: monospace;
+    letter-spacing: 0.02em;
+}
+
+.japan-max-time {
+    font-size: 0.65rem;
+    font-weight: 500;
+    color: rgba(148, 163, 184, 0.8);
+    font-family: monospace;
+    letter-spacing: 0.05em;
+}
+
+/* 震度アクティブ時の強調 (全国最大) */
+.japan-max-card.intensity-active {
+    border-color: rgba(168, 85, 247, 0.5);
+    box-shadow: 
+        0 8px 32px rgba(0, 0, 0, 0.5),
+        0 0 30px rgba(168, 85, 247, 0.2),
+        inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
