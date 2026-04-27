@@ -344,4 +344,295 @@ document.addEventListener('DOMContentLoaded', () => {
     // 初期化ロード用
     updateDisplay();
     fetchEarthquakeHistory();
+
+    // ========================================
+    // 強震モニタ風：現在地付近の震度表示
+    // ========================================
+    const kyoshinCard = document.getElementById('kyoshin-card');
+    const kyoshinLocation = document.getElementById('kyoshin-location');
+    const kyoshinIntensityValue = document.getElementById('kyoshin-intensity-value');
+    const kyoshinIntensityCircle = document.getElementById('kyoshin-intensity-circle');
+    const kyoshinStatus = document.getElementById('kyoshin-status');
+    const kyoshinTime = document.getElementById('kyoshin-time');
+    const kyoshinLiveDot = document.getElementById('kyoshin-live-dot');
+    const kyoshinGal = document.getElementById('kyoshin-gal');
+
+    // 都道府県の代表的な緯度経度
+    const prefectureCoords = {
+        '北海道': { lat: 43.06, lng: 141.35 },
+        '青森県': { lat: 40.82, lng: 140.74 },
+        '岩手県': { lat: 39.70, lng: 141.15 },
+        '宮城県': { lat: 38.27, lng: 140.87 },
+        '秋田県': { lat: 39.72, lng: 140.10 },
+        '山形県': { lat: 38.24, lng: 140.34 },
+        '福島県': { lat: 37.75, lng: 140.47 },
+        '茨城県': { lat: 36.34, lng: 140.45 },
+        '栃木県': { lat: 36.57, lng: 139.88 },
+        '群馬県': { lat: 36.39, lng: 139.06 },
+        '埼玉県': { lat: 35.86, lng: 139.65 },
+        '千葉県': { lat: 35.61, lng: 140.12 },
+        '東京都': { lat: 35.68, lng: 139.69 },
+        '神奈川県': { lat: 35.45, lng: 139.64 },
+        '新潟県': { lat: 37.90, lng: 139.02 },
+        '富山県': { lat: 36.70, lng: 137.21 },
+        '石川県': { lat: 36.59, lng: 136.63 },
+        '福井県': { lat: 36.07, lng: 136.22 },
+        '山梨県': { lat: 35.66, lng: 138.57 },
+        '長野県': { lat: 36.23, lng: 138.18 },
+        '岐阜県': { lat: 35.39, lng: 136.72 },
+        '静岡県': { lat: 34.98, lng: 138.38 },
+        '愛知県': { lat: 35.18, lng: 136.91 },
+        '三重県': { lat: 34.73, lng: 136.51 },
+        '滋賀県': { lat: 35.00, lng: 135.87 },
+        '京都府': { lat: 35.02, lng: 135.76 },
+        '大阪府': { lat: 34.69, lng: 135.52 },
+        '兵庫県': { lat: 34.69, lng: 135.18 },
+        '奈良県': { lat: 34.69, lng: 135.83 },
+        '和歌山県': { lat: 34.23, lng: 135.17 },
+        '鳥取県': { lat: 35.50, lng: 134.24 },
+        '島根県': { lat: 35.47, lng: 133.05 },
+        '岡山県': { lat: 34.66, lng: 133.93 },
+        '広島県': { lat: 34.40, lng: 132.46 },
+        '山口県': { lat: 34.19, lng: 131.47 },
+        '徳島県': { lat: 34.07, lng: 134.56 },
+        '香川県': { lat: 34.34, lng: 134.04 },
+        '愛媛県': { lat: 33.84, lng: 132.77 },
+        '高知県': { lat: 33.56, lng: 133.53 },
+        '福岡県': { lat: 33.59, lng: 130.40 },
+        '佐賀県': { lat: 33.25, lng: 130.30 },
+        '長崎県': { lat: 32.74, lng: 129.87 },
+        '熊本県': { lat: 32.79, lng: 130.74 },
+        '大分県': { lat: 33.24, lng: 131.61 },
+        '宮崎県': { lat: 31.91, lng: 131.42 },
+        '鹿児島県': { lat: 31.56, lng: 130.56 },
+        '沖縄県': { lat: 26.34, lng: 127.80 }
+    };
+
+    let userLat = null;
+    let userLng = null;
+    let nearestPref = null;
+    let kyoshinInterval = null;
+
+    // 距離計算（Haversine）
+    function calcDistance(lat1, lng1, lat2, lng2) {
+        const R = 6371;
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLng = (lng2 - lng1) * Math.PI / 180;
+        const a = Math.sin(dLat / 2) ** 2 +
+                  Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                  Math.sin(dLng / 2) ** 2;
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    }
+
+    // 最寄り都道府県を検索
+    function findNearestPrefecture(lat, lng) {
+        let minDist = Infinity;
+        let nearest = null;
+        for (const [pref, coord] of Object.entries(prefectureCoords)) {
+            const dist = calcDistance(lat, lng, coord.lat, coord.lng);
+            if (dist < minDist) {
+                minDist = dist;
+                nearest = pref;
+            }
+        }
+        return nearest;
+    }
+
+    // P2PQuakeの震度スケール → 表示文字列
+    function p2pScaleToDisplay(scale) {
+        const map = {
+            10: '1', 20: '2', 30: '3', 40: '4',
+            45: '5弱', 46: '5弱', 50: '5強', 55: '6弱', 60: '6強', 70: '7'
+        };
+        return map[scale] || String(scale);
+    }
+
+    // P2PQuakeの震度スケール → 内部値（色取得用・ジェネレーター用）
+    function p2pScaleToInternal(scale) {
+        const map = {
+            10: '1', 20: '2', 30: '3', 40: '4',
+            45: '5-', 46: '5-', 50: '5+', 55: '6-', 60: '6+', 70: '7'
+        };
+        return map[scale] || '1';
+    }
+
+    // 震度(JMA計測震度相当) → 推定PGA(gal)
+    // JMA式: I = 2 * log10(PGA) + 0.94
+    // → PGA = 10^((I - 0.94) / 2)
+    function scaleToGal(p2pScale) {
+        // P2PQuakeスケール値 → JMA計測震度の近似値
+        const scaleToJma = {
+            10: 0.5, 20: 1.5, 30: 2.5, 40: 3.5,
+            45: 4.5, 46: 4.5, 50: 5.0, 55: 5.5, 60: 6.0, 70: 6.5
+        };
+        const jma = scaleToJma[p2pScale];
+        if (jma === undefined) return 0;
+        return Math.round(Math.pow(10, (jma - 0.94) / 2));
+    }
+
+    // 震度に応じた色を円に適用
+    function applyKyoshinColor(scaleStr) {
+        const info = getIntensityColor(scaleStr);
+        kyoshinIntensityCircle.style.background = info.bg;
+        kyoshinIntensityCircle.style.borderColor = info.glow;
+        kyoshinIntensityCircle.style.boxShadow = `0 0 20px ${info.glow}, inset 0 0 10px rgba(255,255,255,0.3)`;
+        kyoshinIntensityValue.style.color = info.textDark ? '#111827' : '#ffffff';
+        kyoshinCard.classList.add('intensity-active');
+    }
+
+    // 無震状態のリセット
+    function resetKyoshinColor() {
+        kyoshinIntensityCircle.style.background = 'rgba(30, 41, 59, 0.9)';
+        kyoshinIntensityCircle.style.borderColor = 'rgba(100, 180, 255, 0.3)';
+        kyoshinIntensityCircle.style.boxShadow = '0 0 16px rgba(59, 130, 246, 0.15), inset 0 0 12px rgba(0, 0, 0, 0.4)';
+        kyoshinIntensityValue.style.color = 'rgba(200, 220, 255, 0.8)';
+        kyoshinCard.classList.remove('intensity-active');
+    }
+
+    // 地震検知時にメインジェネレーターへ反映
+    function applyToGenerator(eqItem) {
+        if (!eqItem || !eqItem.earthquake) return;
+        const eq = eqItem.earthquake;
+        const hypo = eq.hypocenter;
+
+        if (hypo && hypo.name && hypo.name !== '不明' && hypo.name !== '') {
+            inputEpicenter.value = hypo.name;
+        }
+        if (eq.time) {
+            inputTime.value = eq.time;
+        }
+        if (hypo && hypo.depth !== undefined && hypo.depth !== -1) {
+            inputDepth.value = hypo.depth;
+        }
+        if (hypo && hypo.magnitude !== undefined && hypo.magnitude !== -1) {
+            inputMagnitude.value = hypo.magnitude;
+        }
+        if (eq.maxScale) {
+            const scaleMap = {
+                10: '1', 20: '2', 30: '3', 40: '4',
+                45: '5-', 50: '5+', 55: '6-', 60: '6+', 70: '7'
+            };
+            if (scaleMap[eq.maxScale]) {
+                inputIntensity.value = scaleMap[eq.maxScale];
+            }
+        }
+        updateDisplay();
+    }
+
+    // P2PQuake APIから最新の地震情報を取得して表示
+    async function fetchKyoshinData() {
+        if (!nearestPref) return;
+
+        try {
+            const res = await fetch('https://api.p2pquake.net/v2/history?codes=551&limit=5');
+            const data = await res.json();
+
+            const now = new Date();
+            kyoshinTime.textContent = now.toTimeString().split(' ')[0];
+
+            // 直近30分以内の地震で、最寄りの都道府県の震度を探す
+            let foundIntensity = null;
+            let foundTime = null;
+            let foundEqItem = null;
+
+            for (const item of data) {
+                if (!item.earthquake || !item.points) continue;
+
+                const eqTime = new Date(item.earthquake.time.replace(/\//g, '-'));
+                const diffMin = (now - eqTime) / 60000;
+
+                // 30分以内の地震のみ
+                if (diffMin > 30) continue;
+
+                // 現在地の都道府県で観測された震度を検索
+                for (const point of item.points) {
+                    if (point.pref === nearestPref || point.addr.startsWith(nearestPref)) {
+                        if (foundIntensity === null || point.scale > foundIntensity) {
+                            foundIntensity = point.scale;
+                            foundTime = item.earthquake.time;
+                            foundEqItem = item;
+                        }
+                    }
+                }
+            }
+
+            if (foundIntensity !== null) {
+                const displayText = p2pScaleToDisplay(foundIntensity);
+                const internalVal = p2pScaleToInternal(foundIntensity);
+                const galValue = scaleToGal(foundIntensity);
+
+                kyoshinIntensityValue.textContent = displayText;
+                applyKyoshinColor(internalVal);
+                kyoshinGal.textContent = `≈ ${galValue} gal`;
+                kyoshinGal.style.color = 'rgba(100, 220, 180, 0.9)';
+                kyoshinStatus.textContent = `検知: ${foundTime}`;
+                kyoshinStatus.style.color = 'rgba(239, 68, 68, 0.9)';
+
+                // メインジェネレーターにも反映
+                applyToGenerator(foundEqItem);
+            } else {
+                kyoshinIntensityValue.textContent = '0';
+                resetKyoshinColor();
+                kyoshinGal.textContent = '0 gal';
+                kyoshinGal.style.color = 'rgba(148, 163, 184, 0.6)';
+                kyoshinStatus.textContent = '観測なし（直近30分）';
+                kyoshinStatus.style.color = 'rgba(148, 163, 184, 0.7)';
+            }
+
+            kyoshinLiveDot.className = 'kyoshin-live-dot';
+
+        } catch (err) {
+            console.error('強震モニタデータ取得エラー:', err);
+            kyoshinStatus.textContent = '取得エラー';
+            kyoshinLiveDot.className = 'kyoshin-live-dot error';
+        }
+    }
+
+    // 位置情報の取得とモニタリング開始
+    function initKyoshinMonitor() {
+        if (!navigator.geolocation) {
+            kyoshinLocation.textContent = '位置情報非対応';
+            kyoshinStatus.textContent = 'Geolocation非対応';
+            kyoshinLiveDot.className = 'kyoshin-live-dot error';
+            return;
+        }
+
+        kyoshinLiveDot.className = 'kyoshin-live-dot searching';
+
+        navigator.geolocation.getCurrentPosition(
+            (pos) => {
+                userLat = pos.coords.latitude;
+                userLng = pos.coords.longitude;
+                nearestPref = findNearestPrefecture(userLat, userLng);
+
+                kyoshinLocation.textContent = `📍 ${nearestPref}付近`;
+                kyoshinLiveDot.className = 'kyoshin-live-dot';
+
+                // 初回取得
+                fetchKyoshinData();
+
+                // 15秒ごとにポーリング
+                kyoshinInterval = setInterval(fetchKyoshinData, 15000);
+            },
+            (err) => {
+                console.warn('位置情報取得エラー:', err);
+                // フォールバック: 東京をデフォルトにする
+                userLat = 35.68;
+                userLng = 139.69;
+                nearestPref = '東京都';
+
+                kyoshinLocation.textContent = `📍 ${nearestPref}付近（既定）`;
+                kyoshinLiveDot.className = 'kyoshin-live-dot';
+                kyoshinStatus.textContent = '位置情報: 既定値使用';
+
+                fetchKyoshinData();
+                kyoshinInterval = setInterval(fetchKyoshinData, 15000);
+            },
+            { timeout: 10000, maximumAge: 300000 }
+        );
+    }
+
+    // 強震モニタ初期化
+    initKyoshinMonitor();
 });
+
