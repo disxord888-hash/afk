@@ -21,17 +21,83 @@
     <button id="btn-custom-play" style="display:none"></button>
     <button id="btn-json-export" style="display:none"></button>
 
-    <div class="app-container">        <!-- メイン画面: モニター -->
+    <div class="app-container">
+        <!-- 色凡例テーブル -->
+        <div class="legend-bar" id="legend-bar">
+            <table class="legend-table">
+                <thead>
+                    <tr>
+                        <th class="legend-label"></th>
+                        <th class="legend-emoji">⬜</th>
+                        <th class="legend-emoji">⬛</th>
+                        <th class="legend-emoji">🟦</th>
+                        <th class="legend-emoji">🟩</th>
+                        <th class="legend-emoji">🟨</th>
+                        <th class="legend-emoji">🟧</th>
+                        <th class="legend-emoji">🟥</th>
+                        <th class="legend-emoji">🟪</th>
+                        <th class="legend-emoji">⚠</th>
+                        <th class="legend-emoji">🤕</th>
+                        <th class="legend-emoji">🗾</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr class="legend-row-int">
+                        <td class="legend-label">震</td>
+                        <td>0</td>
+                        <td>1</td>
+                        <td>2</td>
+                        <td>3</td>
+                        <td>4</td>
+                        <td>5±</td>
+                        <td>6±</td>
+                        <td>7</td>
+                        <td class="legend-special">5~<br><small>M7+</small></td>
+                        <td class="legend-special">6~<br><small>M7.5+</small></td>
+                        <td class="legend-special">7<br><small>M8+</small></td>
+                    </tr>
+                    <tr class="legend-row-mag">
+                        <td class="legend-label">M</td>
+                        <td>~2.4</td>
+                        <td>~3.5</td>
+                        <td>~4.5</td>
+                        <td>~5.5</td>
+                        <td>~6.0</td>
+                        <td>~6.5</td>
+                        <td>~7.0</td>
+                        <td>~7.5</td>
+                        <td>~8.0</td>
+                        <td>~8.5</td>
+                        <td>8.5+</td>
+                    </tr>
+                    <tr class="legend-row-dep">
+                        <td class="legend-label">㌔</td>
+                        <td>400+</td>
+                        <td>~400</td>
+                        <td>~200</td>
+                        <td>~100</td>
+                        <td>~50</td>
+                        <td>~30</td>
+                        <td>~20</td>
+                        <td>~10</td>
+                        <td colspan="3" class="legend-na">-</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- メイン画面: モニター -->
         <main class="main-display">
-            <!-- 全国最大震度 左上 -->
+            <!-- メイン情報表示（左上） -->
             <div class="japan-max-card" id="japan-max-card">
                 <div class="japan-max-header">
-                    <span class="japan-max-icon">🗾</span>
-                    <span class="japan-max-title">全国最大震度</span>
+                    <span class="japan-max-icon">📌</span>
+                    <span class="japan-max-title" id="japan-max-title">メイン表示詳細</span>
+                    <button class="card-mode-toggle" id="japan-max-mode-toggle" title="計測震度/震度 切替">震度</button>
                 </div>
                 <div class="japan-max-body">
                     <div class="japan-max-circle" id="japan-max-circle">
-                        <span class="japan-max-value" id="japan-max-value">-</span>
+                        <span class="japan-max-value" id="japan-max-value">0</span>
                     </div>
                     <div class="japan-max-info">
                         <div class="japan-max-location" id="japan-max-location">--</div>
@@ -45,6 +111,7 @@
                 <div class="kyoshin-header">
                     <span class="kyoshin-icon">📡</span>
                     <span class="kyoshin-title">現在地付近の震度</span>
+                    <button class="card-mode-toggle" id="kyoshin-mode-toggle" title="計測震度/震度 切替">震度</button>
                     <span class="kyoshin-live-dot" id="kyoshin-live-dot"></span>
                 </div>
                 <div class="kyoshin-location-wrap">
@@ -101,13 +168,20 @@
                 </div>
                 <div class="kyoshin-intensity-display">
                     <div class="kyoshin-intensity-circle" id="kyoshin-intensity-circle">
-                        <span class="kyoshin-intensity-value" id="kyoshin-intensity-value">-</span>
+                        <span class="kyoshin-intensity-value" id="kyoshin-intensity-value">0</span>
                     </div>
                 </div>
                 <div class="kyoshin-gal" id="kyoshin-gal">-- gal</div>
-                <div class="kyoshin-status" id="kyoshin-status">接続中...</div>
+                <div class="kyoshin-status" id="kyoshin-status">待機中</div>
                 <div class="kyoshin-time" id="kyoshin-time">--:--:--</div>
             </div>
+
+            <!-- リアルタイム接続ボタン（右下） -->
+            <button class="realtime-btn" id="realtime-btn" title="リアルタイム接続">
+                <span class="realtime-btn-icon">📡</span>
+                <span class="realtime-btn-label" id="realtime-btn-label">接続開始</span>
+            </button>
+
             <div class="monitor-wrapper" id="monitor-wrapper">
                 <!-- ナビゲーションボタン -->
                 <button class="eq-nav-btn eq-nav-prev" id="eq-nav-prev" title="前の地震">＜</button>
@@ -127,7 +201,7 @@
                 <div class="intensity-center" id="display-intensity-card">
                     <div class="monitor-label">最大震度 <span class="title-emoji" id="title-emoji-int"></span></div>
                     <div class="intensity-value-wrap">
-                        <span class="value" id="disp-val-int">-</span>
+                        <span class="value" id="disp-val-int">0</span>
                     </div>
                 </div>
 
