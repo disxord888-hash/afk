@@ -103,12 +103,6 @@ document.addEventListener('DOMContentLoaded', () => {
         return { color: 'var(--color-white)', emoji: '⬜' };
     }
 
-    // 表示上の震度からP2P内部スケールへ変換
-    function displayToP2PScale(disp) {
-        const map = { '1': 10, '2': 20, '3': 30, '4': 40, '5-': 45, '5+': 50, '6-': 55, '6+': 60, '7': 70 };
-        return map[disp] || 0; // 0相当
-    }
-
     // 更新処理
     function updateDisplay() {
         const intVal = inputIntensity.value;
@@ -124,7 +118,7 @@ document.addEventListener('DOMContentLoaded', () => {
         dispValTime.textContent = timeVal || '--';
 
         // 1. 震度
-        dispValInt.textContent = intVal === '0' || !intVal ? '0' : intVal;
+        dispValInt.textContent = intVal;
         const intInfo = getIntensityColor(intVal);
         titleEmojiInt.textContent = intInfo.emoji;
         cardInt.style.background = intInfo.bg;
@@ -134,35 +128,6 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             dispValInt.classList.remove('text-dark');
         }
-
-        // ========================================
-        // メイン情報表示（旧：全国最大震度カード）同期
-        // ========================================
-        lastJapanMaxScale = displayToP2PScale(intVal);
-        const internalVal = p2pScaleToInternal(lastJapanMaxScale);
-        const galValue = scaleToGal(lastJapanMaxScale);
-
-        if (japanMaxMode === 'keisoku') {
-            japanMaxValue.textContent = p2pScaleToKeisoku(lastJapanMaxScale);
-        } else {
-            japanMaxValue.textContent = lastJapanMaxScale === 0 ? '0' : p2pScaleToDisplay(lastJapanMaxScale);
-        }
-        
-        japanMaxLocation.textContent = simplifyAddress(epiVal) || '不明';
-        japanMaxGal.textContent = `${galValue} gal`;
-        japanMaxTime.textContent = timeVal ? (timeVal.includes(' ') ? timeVal.split(' ')[1].substring(0, 5) : timeVal.substring(0, 5)) : '--:--';
-
-        if (lastJapanMaxScale >= 10) {
-            const colorInfo = getIntensityColor(internalVal);
-            japanMaxCircle.style.background = colorInfo.bg;
-            japanMaxCircle.style.borderColor = colorInfo.glow;
-            japanMaxCircle.style.boxShadow = `0 0 20px ${colorInfo.glow}, inset 0 0 10px rgba(255,255,255,0.3)`;
-            japanMaxValue.style.color = colorInfo.textDark ? '#111827' : '#ffffff';
-            japanMaxCard.classList.add('intensity-active');
-        } else {
-            resetJapanMaxColor();
-        }
-
 
         // 2. マグニチュード
         const magParsed = parseFloat(magVal);
@@ -503,7 +468,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // P2PQuakeの震度スケール → 表示文字列(震度表記)
     function p2pScaleToDisplay(scale) {
-        if (!scale || scale === 0) return '0';
         const map = {
             10: '1', 20: '2', 30: '3', 40: '4',
             45: '5弱', 46: '5弱', 50: '5強', 55: '6弱', 60: '6強', 70: '7'
@@ -513,13 +477,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // P2PQuakeの震度スケール → 計測震度(小数点)
     function p2pScaleToKeisoku(scale) {
-        if (!scale || scale === 0) return '0.0';
         const map = {
             10: 0.5, 20: 1.5, 30: 2.5, 40: 3.5,
             45: 4.5, 46: 4.5, 50: 5.0, 55: 5.5, 60: 6.0, 70: 6.5
         };
         const val = map[scale];
-        if (val === undefined) return '0.0';
+        if (val === undefined) return '-';
         return val.toFixed(1);
     }
 
@@ -632,7 +595,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (japanMaxMode === 'keisoku') {
                 japanMaxValue.textContent = p2pScaleToKeisoku(lastJapanMaxScale);
             } else {
-                japanMaxValue.textContent = lastJapanMaxScale === 0 ? '0' : p2pScaleToDisplay(lastJapanMaxScale);
+                japanMaxValue.textContent = p2pScaleToDisplay(lastJapanMaxScale);
             }
         }
     });
@@ -646,7 +609,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (kyoshinMode === 'keisoku') {
                 kyoshinIntensityValue.textContent = p2pScaleToKeisoku(lastKyoshinScale);
             } else {
-                kyoshinIntensityValue.textContent = lastKyoshinScale === 0 ? '0' : p2pScaleToDisplay(lastKyoshinScale);
+                kyoshinIntensityValue.textContent = p2pScaleToDisplay(lastKyoshinScale);
             }
         }
     });
@@ -665,7 +628,55 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (!data || data.length === 0) return;
 
-            // 1. 選択地点（現在地付近）の震度を探す
+            // 1. 全国最大震度の更新 (最新の地震: data[0])
+            const latestEqGlobal = data[0];
+            if (latestEqGlobal.earthquake && latestEqGlobal.earthquake.maxScale !== undefined) {
+                const maxScale = latestEqGlobal.earthquake.maxScale;
+                lastJapanMaxScale = maxScale;
+                const maxInternalVal = p2pScaleToInternal(maxScale);
+                const maxGalValue = scaleToGal(maxScale);
+                
+                // モードに応じた表示
+                if (japanMaxMode === 'keisoku') {
+                    japanMaxValue.textContent = p2pScaleToKeisoku(maxScale);
+                } else {
+                    japanMaxValue.textContent = p2pScaleToDisplay(maxScale);
+                }
+                
+                // 代表地点の取得
+                let maxLoc = "不明";
+                if (latestEqGlobal.points && latestEqGlobal.points.length > 0) {
+                    const topPoint = latestEqGlobal.points.find(p => p.scale === maxScale) || latestEqGlobal.points[0];
+                    maxLoc = simplifyAddress(topPoint.addr);
+                } else if (latestEqGlobal.earthquake.hypocenter) {
+                    maxLoc = latestEqGlobal.earthquake.hypocenter.name;
+                }
+
+                japanMaxLocation.textContent = maxLoc;
+                japanMaxGal.textContent = `${maxGalValue} gal`;
+                
+                const rawTime = latestEqGlobal.earthquake.time;
+                japanMaxTime.textContent = (rawTime.includes(' ') ? rawTime.split(' ')[1] : rawTime).substring(0, 5);
+                
+                // 色とアニメーションの適用
+                if (maxScale >= 10) {
+                    const colorInfo = getIntensityColor(maxInternalVal);
+                    japanMaxCircle.style.background = colorInfo.bg;
+                    japanMaxCircle.style.borderColor = colorInfo.glow;
+                    japanMaxCircle.style.boxShadow = `0 0 20px ${colorInfo.glow}, inset 0 0 10px rgba(255,255,255,0.3)`;
+                    japanMaxValue.style.color = colorInfo.textDark ? '#111827' : '#ffffff';
+                    japanMaxCard.classList.add('intensity-active');
+                } else {
+                    resetJapanMaxColor();
+                }
+
+                // メインジェネレーターの更新 (最新の地震を反映)
+                if (currentEqIndex === 0) {
+                    applyToGenerator(latestEqGlobal);
+                }
+            }
+
+            // 2. 選択地点（現在地付近）の震度を探す
             if (nearestPref) {
                 let foundIntensity = null;
                 let foundTime = null;
@@ -702,12 +713,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     kyoshinStatus.textContent = `最新: ${timePart.substring(0, 5)}`;
                     kyoshinStatus.style.color = 'rgba(239, 68, 68, 0.9)';
                 } else {
-                    lastKyoshinScale = 0;
-                    if (kyoshinMode === 'keisoku') {
-                        kyoshinIntensityValue.textContent = '0.0';
-                    } else {
-                        kyoshinIntensityValue.textContent = '0';
-                    }
+                    lastKyoshinScale = null;
+                    kyoshinIntensityValue.textContent = '-';
                     resetKyoshinColor();
                     kyoshinGal.textContent = '0 gal';
                     kyoshinGal.style.color = 'rgba(148, 163, 184, 0.6)';
